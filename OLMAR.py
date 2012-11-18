@@ -1,12 +1,62 @@
-#  
-# Algorithm based on this publication:  
-# http://alphapowertrading.com/papers/OnLinePortfolioSelectionMovingAverageReversion.pdf  
 # 
-# Quantopian forum thread:
-# https://www.quantopian.com/posts/on-line-portfolio-selection-from-grant-k
+# Algorithm based on this publication:
+# http://alphapowertrading.com/papers/OnLinePortfolioSelectionMovingAverageReversion.pdf
+# 
 
 import numpy as np
 
+def initialize(context):
+    
+    context.stocks = [sid(8554),sid(19920),sid(22739)]
+    context.price = {}
+    context.x_tilde = {}
+    context.b_t = {}
+    context.b = {}
+    context.b_norm = {}
+    
+    context.eps = 1.1
+ 
+def handle_data(context,data):
+    
+    x_bar = 0.0
+    m = len(context.stocks)
+    sq_norm = 0.0
+    dot_prod = 0.0
+    #b_tot = 0.0
+    
+    # find relative moving average price for each security
+    for stock in context.stocks:
+        price = data[stock].price
+        x_tilde = float(data[stock].mavg(3))/price
+        if context.portfolio.positions_value > 0.0:
+            b_t = context.portfolio.positions[stock].amount * price
+            b_t = b_t/context.portfolio.positions_value
+        else:
+            b_t = 1.0/m
+        x_bar = x_bar + x_tilde
+    
+    x_bar = x_bar/m  # average predicted relative price
+    
+    for stock in context.stocks:
+        sq_norm = sq_norm + (x_tilde-x_bar)**2
+        dot_prod = dot_prod + b_t*x_tilde 
+            
+    lam = max(0,(context.eps-dot_prod)/sq_norm)
+    
+    for stock in context.stocks:
+        b = b_t + lam*(x_tilde-x_bar)
+        #b_tot = b_tot + b
+    
+    #for stock in context.stocks:
+        #b_norm = b/b_tot  # new portfolio
+    
+    #log.debug(len(b))
+    
+    for stock in context.stocks:
+        log.debug(b)
+    
+    b_norm = simplex_projection(b)   
+            
 def simplex_projection(v, z=1):  
     """Projection vectors to the simplex domain
 
@@ -48,42 +98,4 @@ def simplex_projection(v, z=1):
     # w_{i}=max{ v_{i} - theta }  
     w[idx[:j]] = v[idx[:j]] - theta
 
-    return w
-
-
-def initialize(context):  
-    context.stocks = [sid(8554),sid(19920),sid(22739)]  
-    context.price = {}  
-    context.x_tilde = {}  
-    context.b_t = {}  
-    context.b = {}  
-    context.b_norm = {}  
-    context.eps = 1.1  
-
-def handle_data(data, context):  
-    x_bar = 0.0  
-    m = len(context.stocks)  
-    sq_norm = 0.0  
-    dot_prod = 0.0  
-    b_tot = 0.0  
-    # find relative moving average price for each security  
-    for stock in context.stocks:  
-        price = data[stock].price  
-        x_tilde = float(data[stock].mavg(3))/price  
-        if data.portfolio.positions_value > 0.0:  
-            b_t = data.portfolio.positions[stock].amount * price  
-            b_t = b_t/data.portfolio.positions_value  
-        else:  
-            b_t = 1.0/m  
-        x_bar = x_bar + x_tilde  
-    x_bar = x_bar/m  # average predicted relative price  
-    for stock in context.stocks:  
-        sq_norm = sq_norm + (x_tilde-x_bar)**2  
-        dot_prod = dot_prod + b_t*x_tilde  
-    lam = max(0,(context.eps-dot_prod)/sq_norm)  
-    for stock in context.stocks:  
-        b = b_t + lam*(x_tilde-x_bar)  
-        b_tot = b_tot + b  
-    for stock in context.stocks:  
-        b_norm = b/b_tot  # new portfolio 
-        context.b_norm[stock] = b_norm
+    return w    

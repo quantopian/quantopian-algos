@@ -91,8 +91,8 @@ def simplex_projection(v, b=1):
     u = np.sort(v)[::-1]
     sv = np.cumsum(u)
 
-    rho = np.where(u > (sv - b) / np.arange(p))[0][-1]
-    theta = np.max((sv[rho] - b) / (rho+1))
+    rho = np.where(u > (sv - b) / np.arange(1, p+1))[0][-1]
+    theta = np.max([0, (sv[rho] - b) / (rho+1)])
     w = (v - theta)
     w[w<0] = 0
     return w

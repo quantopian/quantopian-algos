@@ -87,8 +87,8 @@ def simplex_projection(v, b=1):
     p = len(v)
 
     # Sort v into u in descending order
-    u = np.sort(np.abs(v))[::-1]
     v = (v > 0) * v
+    u = np.sort(v)[::-1]
     sv = np.cumsum(u)
 
     rho = np.where(u > (sv - b) / np.arange(p))[0][-1]

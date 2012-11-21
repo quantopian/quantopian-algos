@@ -11,8 +11,8 @@ def initialize(context):
     context.price = {}
     context.x_tilde = {}
     context.b_t = {}
-    context.b = {}
-    context.b_norm = {}
+    #context.b = {}
+    #context.b_norm = {}
     
     context.eps = 1.1
  
@@ -22,6 +22,7 @@ def handle_data(context,data):
     m = len(context.stocks)
     sq_norm = 0.0
     dot_prod = 0.0
+    b = []
     #b_tot = 0.0
     
     # find relative moving average price for each security
@@ -44,7 +45,7 @@ def handle_data(context,data):
     lam = max(0,(context.eps-dot_prod)/sq_norm)
     
     for stock in context.stocks:
-        b = b_t + lam*(x_tilde-x_bar)
+        b.append(b_t + lam*(x_tilde-x_bar))
         #b_tot = b_tot + b
     
     #for stock in context.stocks:
@@ -52,10 +53,12 @@ def handle_data(context,data):
     
     #log.debug(len(b))
     
-    for stock in context.stocks:
-        log.debug(b)
+    #for stock in context.stocks:
+        #log.debug(b)
     
-    b_norm = simplex_projection(b)   
+    log.debug(b)
+    b_norm = simplex_projection(b)
+    log.debug(b_norm)
             
 def simplex_projection(v, z=1):  
     """Projection vectors to the simplex domain

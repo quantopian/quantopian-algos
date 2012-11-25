@@ -7,58 +7,83 @@ import numpy as np
 
 def initialize(context):
 
-    context.stocks = [sid(8554),sid(19920),sid(22739)]
+    context.stocks = [sid(700),sid(8229),sid(4283),sid(1267),sid(698),sid(3951),sid(5923),sid(3496),sid(7792),sid(7883)]
+    context.total_investment = 100000.0
     context.price = {}
-    context.x_tilde = {}
-    context.b_t = {}
-    #context.b = {}
-    #context.b_norm = {}
-
-    context.eps = 1.1
+    context.eps = 10
+    
+    context.init = 0
 
 def handle_data(context,data):
 
     x_bar = 0.0
     m = len(context.stocks)
-    sq_norm = 0.0
-    dot_prod = 0.0
-    b = []
-    #b_tot = 0.0
-
+    x_tilde = np.zeros(m)
+    b_t = np.zeros(m)
+    b = np.zeros(m)
+    
+    #if context.portfolio.positions_value > 0.0:
+        #init = 1https://www.quantopian.com/algorithms
+    #else:
+        #init = 0
+    
+    log.debug(context.init)
+    
+    i = 0
     # find relative moving average price for each security
     for stock in context.stocks:
         price = data[stock].price
-        x_tilde = float(data[stock].mavg(3))/price
-        if context.portfolio.positions_value > 0.0:
-            b_t = context.portfolio.positions[stock].amount * price
-            b_t = b_t/context.portfolio.positions_value
+        x_tilde[i] = float(data[stock].mavg(3))/price
+        if context.init > 0:
+            b_t[i] = context.portfolio.positions[stock].amount * price
+            b_t[i] = b_t[i]/context.portfolio.positions_value
+            log.debug(b_t[i])
         else:
-            b_t = 1.0/m
-        x_bar = x_bar + x_tilde
+            b_t[i] = 1.0/m
+        x_bar = x_bar + x_tilde[i]
+        i = i + 1
 
-    x_bar = x_bar/m  # average predicted relative price
-
-    for stock in context.stocks:
-        sq_norm = sq_norm + (x_tilde-x_bar)**2
-        dot_prod = dot_prod + b_t*x_tilde
+    x_bar = x_bar/m #average predicted relative price
+    
+    log.debug(x_tilde)
+    log.debug(x_bar)
+    log.debug(x_tilde-x_bar)
+    
+    sq_norm = (np.linalg.norm((x_tilde-x_bar)))**2
+    dot_prod = np.dot(b_t,x_tilde)
 
     lam = max(0,(context.eps-dot_prod)/sq_norm)
-
-    for stock in context.stocks:
-        b.append(b_t + lam*(x_tilde-x_bar))
-        #b_tot = b_tot + b
-
-    #for stock in context.stocks:
-        #b_norm = b/b_tot  # new portfolio
-
-    #log.debug(len(b))
-
-    #for stock in context.stocks:
-        #log.debug(b)
-
+    
+    db = lam*(x_tilde-x_bar)
+    log.debug(db)
+    log.debug(np.dot(np.ones(m),db))
+    
+    b = b_t + lam*(x_tilde-x_bar)
     log.debug(b)
-    b_norm = simplex_projection(b)
+    
+    if context.init > 0:
+        b_norm = simplex_projection(b)
+    else:
+        b_norm = b_t
+    
+    if context.init > 0:
+        positions_value = context.portfolio.positions_value
+    else:
+        positions_value = context.total_investment
+    
     log.debug(b_norm)
+    
+    i = 0
+    #rebalance portfolio
+    for stock in context.stocks:
+         n = b_norm[i]*positions_value/data[stock].price
+         dn = n - context.portfolio.positions[stock].amount
+         #order(stock,dn)
+         order(stock,100)
+         log.debug(dn)
+         i = i + 1
+
+    context.init = 1
 
 def simplex_projection(v, b=1):
     """Projection vectors to the simplex domain

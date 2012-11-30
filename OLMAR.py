@@ -25,44 +25,43 @@ def handle_data(context, data):
 
     b = np.zeros(m)
 
-    log.debug(context.init)
-
     # find relative moving average price for each security
     for i, stock in enumerate(context.stocks):
         price = data[stock].price
         x_tilde[i] = float(data[stock].mavg(3))/price
-        context.b_t[i] = context.portfolio.positions[stock].amount * price
-        context.b_t[i] = context.b_t[i]/context.portfolio.positions_value
-        log.debug(context.b_t[i])
+        # Not sure where those lines are in the algo
+        #context.b_t[i] = context.portfolio.positions[stock].amount * price
+        #context.b_t[i] = context.b_t[i]/context.portfolio.positions_value
+        #log.debug(context.b_t[i])
+        #x_bar = x_bar + x_tilde[i]
 
-        x_bar = x_bar + x_tilde[i]
 
+    ###########################
+    # Inside of OLMAR (algo 2)
 
-    x_bar = x_bar/m #average predicted relative price
+    x_bar = x_tilde.mean()
 
     log.debug(x_tilde)
     log.debug(x_bar)
     log.debug(x_tilde-x_bar)
 
-    ###########################
-    # Inside of OLMAR (algo 2)
-
     # Calculate terms for lambda (lam)
-    sq_norm = (np.linalg.norm((x_tilde-x_bar)))**2
     dot_prod = np.dot(context.b_t, x_tilde)
+    nom = (context.eps - dot_prod)
+    denom = (np.linalg.norm((x_tilde-x_bar)))**2
+    # Something seems wrong here, denom gets extremely small
+    # which is not surprising given that we just take the
+    # length of a demeaned vector, which should be zero... ?
+    log.debug(nom)
+    log.debug(denom)
 
-    lam = max(0,(context.eps-dot_prod)/sq_norm)
-
-
-    db = lam*(x_tilde-x_bar)
-    log.debug(db)
-    log.debug(np.dot(np.ones(m),db))
-
+    lam = max(0, nom/denom)
+    log.debug(lam)
     b = context.b_t + lam*(x_tilde-x_bar)
     log.debug(b)
 
-    b_norm = b #simplex_projection(b)
-
+    b_norm = simplex_projection(b)
+    log.debug(simplex_projection([.4 ,.3, -.4, .5]))
     log.debug(b_norm)
 
     rebalance_portfolio(context, data, b_norm)

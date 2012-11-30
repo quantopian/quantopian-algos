@@ -1,89 +1,88 @@
-#
-# Algorithm based on this publication:
-# http://alphapowertrading.com/papers/OnLinePortfolioSelectionMovingAverageReversion.pdf
-#
-
 import numpy as np
 
 def initialize(context):
 
     context.stocks = [sid(700),sid(8229),sid(4283),sid(1267),sid(698),sid(3951),sid(5923),sid(3496),sid(7792),sid(7883)]
+    context.m = len(context.stocks)
+
     context.total_investment = 100000.0
     context.price = {}
     context.eps = 10
-    
-    context.init = 0
+    context.b_t = np.ones(context.m) / context.m
+    log.debug(context.b_t)
+    context.init = False
 
-def handle_data(context,data):
+def handle_data(context, data):
+    if not context.init:
+        context.init = True
+        rebalance_portfolio(context, data, context.b_t)
+        return
+
+    m = context.m
 
     x_bar = 0.0
-    m = len(context.stocks)
     x_tilde = np.zeros(m)
-    b_t = np.zeros(m)
+
     b = np.zeros(m)
-    
-    #if context.portfolio.positions_value > 0.0:
-        #init = 1https://www.quantopian.com/algorithms
-    #else:
-        #init = 0
-    
+
     log.debug(context.init)
-    
-    i = 0
+
     # find relative moving average price for each security
-    for stock in context.stocks:
+    for i, stock in enumerate(context.stocks):
         price = data[stock].price
         x_tilde[i] = float(data[stock].mavg(3))/price
-        if context.init > 0:
-            b_t[i] = context.portfolio.positions[stock].amount * price
-            b_t[i] = b_t[i]/context.portfolio.positions_value
-            log.debug(b_t[i])
-        else:
-            b_t[i] = 1.0/m
+        context.b_t[i] = context.portfolio.positions[stock].amount * price
+        context.b_t[i] = context.b_t[i]/context.portfolio.positions_value
+        log.debug(context.b_t[i])
+
         x_bar = x_bar + x_tilde[i]
-        i = i + 1
+
 
     x_bar = x_bar/m #average predicted relative price
-    
+
     log.debug(x_tilde)
     log.debug(x_bar)
     log.debug(x_tilde-x_bar)
-    
+
+    ###########################
+    # Inside of OLMAR (algo 2)
+
+    # Calculate terms for lambda (lam)
     sq_norm = (np.linalg.norm((x_tilde-x_bar)))**2
-    dot_prod = np.dot(b_t,x_tilde)
+    dot_prod = np.dot(context.b_t, x_tilde)
 
     lam = max(0,(context.eps-dot_prod)/sq_norm)
-    
+
+
     db = lam*(x_tilde-x_bar)
     log.debug(db)
     log.debug(np.dot(np.ones(m),db))
-    
-    b = b_t + lam*(x_tilde-x_bar)
-    log.debug(b)
-    
-    if context.init > 0:
-        b_norm = simplex_projection(b)
-    else:
-        b_norm = b_t
-    
-    if context.init > 0:
-        positions_value = context.portfolio.positions_value
-    else:
-        positions_value = context.total_investment
-    
-    log.debug(b_norm)
-    
-    i = 0
-    #rebalance portfolio
-    for stock in context.stocks:
-         n = b_norm[i]*positions_value/data[stock].price
-         dn = n - context.portfolio.positions[stock].amount
-         #order(stock,dn)
-         order(stock,100)
-         log.debug(dn)
-         i = i + 1
 
-    context.init = 1
+    b = context.b_t + lam*(x_tilde-x_bar)
+    log.debug(b)
+
+    b_norm = b #simplex_projection(b)
+
+    log.debug(b_norm)
+
+    rebalance_portfolio(context, data, b_norm)
+
+def rebalance_portfolio(context, data, desired_port):
+    #rebalance portfolio
+    cur_port = np.zeros_like(desired_port)
+    prices = np.zeros_like(desired_port)
+    for i, stock in enumerate(context.stocks):
+        cur_port[i] = context.portfolio.positions[stock].amount / context.portfolio.starting_cash
+        prices[i] = data[stock].price
+
+    diff_port = desired_port - cur_port
+    diff_cash = diff_port * context.portfolio.starting_cash
+
+    order_size = diff_cash / prices
+
+    for stock, order_stock in zip(context.stocks, order_size):
+        order(stock, order_stock)#order_stock)
+
 
 def simplex_projection(v, b=1):
     """Projection vectors to the simplex domain

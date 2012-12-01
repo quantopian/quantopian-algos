@@ -66,6 +66,9 @@ def handle_data(context, data):
 
     rebalance_portfolio(context, data, b_norm)
 
+    # update portfolio
+    context.b_t = b_norm
+
 def rebalance_portfolio(context, data, desired_port):
     #rebalance portfolio
     cur_port = np.zeros_like(desired_port)

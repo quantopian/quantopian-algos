@@ -2,33 +2,38 @@ import numpy as np
 import datetime
 
 def initialize(context):
-    # http://money.usnews.com/funds/etfs/rankings/small-cap-funds
-    #context.stocks = [sid(27796),sid(33412),sid(38902),sid(21508),sid(39458),sid(25899),sid(40143),sid(21519),sid(39143),sid(26449)]
-    # http://www.minyanville.com/sectors/technology/articles/facebook-broadcom-ezchip-among-top-tech/1/23/2013/id/47014?page=full
-    #context.stocks = [sid(26578),sid(42950),sid(19831),sid(18529),sid(4507),sid(32724),sid(16453),sid(20387),sid(20866),sid(23821)]
-    #['AMD', 'CERN', 'COST', 'DELL', 'GPS', 'INTC', 'MMM']
-    context.stocks = [sid(351), sid(1419), sid(1787), sid(25317), sid(3321), sid(3951), sid(4922)]
-    context.m = len(context.stocks)
-    context.b_t = np.ones(context.m) / context.m
-    context.eps = 1  #change epsilon here
+    context.eps = 2  #change epsilon here
     context.init = False
     context.counter = 0
-    
+    context.stocks = []
     set_slippage(slippage.VolumeShareSlippage(volume_limit=0.25, price_impact=0, delay=datetime.timedelta(minutes=0)))
     set_commission(commission.PerShare(cost=0))
+    set_universe(universe.DollarVolumeUniverse(floor_percentile=98.0, ceiling_percentile=100.0))
     
 def handle_data(context, data):    
     context.counter += 1
     if context.counter <= 5:
         return
-
+    
+    context.stocks = [sid for sid in data]
+    m = len(context.stocks)
+    
     if not context.init:
+        context.b_t = np.ones(m) / m
         rebalance_portfolio(context, data, context.b_t)
         context.init = True
         return
 
-    m = context.m
-
+    if len(context.b_t) > m:
+        # need to decrease portfolio vector
+        context.b_t = context.b_t[:m]
+    elif len(context.b_t) < m:
+        # need to grow portfolio vector
+        len_bt = len(context.b_t)
+        context.b_t = np.concatenate([context.b_t, np.ones(m-len_bt) / m])
+    
+    assert len(context.b_t) == m
+    
     x_tilde = np.zeros(m)
 
     b = np.zeros(m)
@@ -64,7 +69,7 @@ def handle_data(context, data):
     log.debug(step_size*mark_rel_dev)
     b = context.b_t + step_size*mark_rel_dev
     b_norm = simplex_projection(b)
-    np.testing.assert_almost_equal(b_norm.sum(), 1)
+    #np.testing.assert_almost_equal(b_norm.sum(), 1)
         
     rebalance_portfolio(context, data, b_norm)
         
@@ -73,7 +78,7 @@ def handle_data(context, data):
     log.debug("Predicted return: {pred_return}".format(pred_return=pred_return))
     
     # Make sure that we actually optimized our objective
-    assert exp_return-.001 <= pred_return, "{new} <= {old}".format(new=exp_return, old=pred_return)
+    #assert exp_return-.001 <= pred_return, "{new} <= {old}".format(new=exp_return, old=pred_return)
     # update portfolio
     context.b_t = b_norm
     
